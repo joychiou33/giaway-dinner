@@ -1,38 +1,63 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { HashRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Order, OrderItem, OrderStatus } from './types';
 import CustomerView from './components/CustomerView';
 import OwnerDashboard from './components/OwnerDashboard';
-import { Store, ShoppingBag } from 'lucide-react';
+import OwnerLogin from './components/OwnerLogin';
+import { Store, ShoppingBag, Lock } from 'lucide-react';
 
-const Navigation: React.FC = () => {
+const Navigation: React.FC<{ isOwner: boolean }> = ({ isOwner }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const path = location.pathname;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-[100] flex justify-around items-center h-16 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] md:max-w-md md:mx-auto md:rounded-t-2xl">
+    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-[100] flex justify-around items-center h-16 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] md:max-w-md md:mx-auto md:rounded-t-2xl no-print">
       <button 
         onClick={() => navigate('/customer')}
-        className={`flex flex-col items-center gap-1 transition-colors ${path === '/customer' ? 'text-orange-500 font-bold' : 'text-slate-400'}`}
+        className={`flex-1 flex flex-col items-center gap-1 transition-colors ${path.startsWith('/customer') ? 'text-orange-500 font-bold' : 'text-slate-400'}`}
       >
         <ShoppingBag size={20} />
-        <span className="text-xs">我要點餐</span>
+        <span className="text-[10px] font-bold">我要點餐</span>
       </button>
-      <button 
-        onClick={() => navigate('/owner')}
-        className={`flex flex-col items-center gap-1 transition-colors ${path.startsWith('/owner') ? 'text-orange-500 font-bold' : 'text-slate-400'}`}
-      >
-        <Store size={20} />
-        <span className="text-xs">老闆後台</span>
-      </button>
+      
+      {isOwner ? (
+        <button 
+          onClick={() => navigate('/owner')}
+          className={`flex-1 flex flex-col items-center gap-1 transition-colors ${path.startsWith('/owner') ? 'text-orange-500 font-bold' : 'text-slate-400'}`}
+        >
+          <Store size={20} />
+          <span className="text-[10px] font-bold">老闆後台</span>
+        </button>
+      ) : (
+        <button 
+          onClick={() => navigate('/login')}
+          className="flex-1 flex flex-col items-center gap-1 text-slate-300 hover:text-slate-400"
+        >
+          <Lock size={18} />
+          <span className="text-[10px]">管理登入</span>
+        </button>
+      )}
     </div>
   );
 };
 
 const App: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [isOwner, setIsOwner] = useState<boolean>(() => {
+    return sessionStorage.getItem('is_owner') === 'true';
+  });
+
+  // 取得當前密碼，若無則設為 88888888
+  const [ownerPasscode, setOwnerPasscode] = useState<string>(() => {
+    const saved = localStorage.getItem('owner_passcode');
+    return saved || '88888888';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('owner_passcode', ownerPasscode);
+  }, [ownerPasscode]);
 
   useEffect(() => {
     const saved = localStorage.getItem('snack_orders');
@@ -49,6 +74,28 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('snack_orders', JSON.stringify(orders));
   }, [orders]);
+
+  const handleLogin = (pass: string) => {
+    if (pass === ownerPasscode) {
+      setIsOwner(true);
+      sessionStorage.setItem('is_owner', 'true');
+      return true;
+    }
+    return false;
+  };
+
+  const handleLogout = () => {
+    setIsOwner(false);
+    sessionStorage.removeItem('is_owner');
+  };
+
+  const handleChangePasscode = (newPass: string) => {
+    if (newPass.length === 8 && /^\d+$/.test(newPass)) {
+      setOwnerPasscode(newPass);
+      return true;
+    }
+    return false;
+  };
 
   const handleAddOrder = useCallback((tableNumber: string, items: OrderItem[]) => {
     const newOrder: Order = {
@@ -67,7 +114,6 @@ const App: React.FC = () => {
   }, []);
 
   const clearTable = useCallback((tableNumber: string) => {
-    // 改為將訂單狀態更新為 'paid' 而非刪除
     setOrders(prev => prev.map(o => 
       (o.tableNumber === tableNumber && o.status !== 'cancelled' && o.status !== 'paid') 
       ? { ...o, status: 'paid' } 
@@ -81,40 +127,31 @@ const App: React.FC = () => {
         <Routes>
           <Route path="/customer" element={<CustomerView onAddOrder={handleAddOrder} />} />
           <Route path="/customer/table/:tableId" element={<CustomerTableWrapper onAddOrder={handleAddOrder} />} />
-          <Route path="/owner" element={<OwnerDashboard orders={orders} onUpdateStatus={updateOrderStatus} onClearTable={clearTable} onManualOrder={() => window.location.hash = '/owner/manual'} />} />
-          <Route path="/owner/manual" element={<ManualOrderWrapper onAddOrder={handleAddOrder} />} />
+          <Route 
+            path="/owner/*" 
+            element={isOwner ? (
+              <OwnerDashboard 
+                orders={orders} 
+                onUpdateStatus={updateOrderStatus} 
+                onClearTable={clearTable} 
+                onManualOrder={() => window.location.hash = '/owner/manual'} 
+                onLogout={handleLogout}
+                onChangePasscode={handleChangePasscode}
+              />
+            ) : <Navigate to="/login" replace />} 
+          />
+          <Route path="/login" element={<OwnerLogin onLogin={handleLogin} />} />
           <Route path="/" element={<Navigate to="/customer" replace />} />
         </Routes>
-        <Navigation />
+        <Navigation isOwner={isOwner} />
       </div>
     </Router>
   );
 };
 
 const CustomerTableWrapper: React.FC<{ onAddOrder: (t: string, items: OrderItem[]) => void }> = ({ onAddOrder }) => {
-  const tableId = window.location.hash.split('/').pop() || '';
-  return <CustomerView onAddOrder={onAddOrder} initialTable={tableId} />;
-};
-
-const ManualOrderWrapper: React.FC<{ onAddOrder: (t: string, items: OrderItem[]) => void }> = ({ onAddOrder }) => {
-  const navigate = useNavigate();
-  return (
-    <div className="relative pb-20">
-      <CustomerView 
-        onAddOrder={(t, i) => {
-          onAddOrder(t, i);
-          navigate('/owner');
-        }} 
-        isStaffMode 
-      />
-      <button 
-        onClick={() => navigate('/owner')}
-        className="fixed top-4 left-4 z-50 bg-white shadow-lg text-slate-900 p-2 rounded-full border border-slate-200 active:scale-95 transition-transform"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-      </button>
-    </div>
-  );
+  const { tableId } = useParams();
+  return <CustomerView onAddOrder={onAddOrder} initialTable={tableId || ''} lockTable />;
 };
 
 export default App;

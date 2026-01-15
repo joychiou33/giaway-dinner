@@ -1,21 +1,26 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { MenuItem, OrderItem, Category } from '../types';
 import { INITIAL_MENU, TABLES } from '../constants';
-import { ShoppingCart, Plus, Minus, Trash2, ArrowLeft, Send, CheckCircle } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Trash2, ArrowLeft, Send, CheckCircle, MapPin } from 'lucide-react';
 
 interface CustomerViewProps {
   onAddOrder: (tableNumber: string, items: OrderItem[]) => void;
   initialTable?: string;
   isStaffMode?: boolean;
+  lockTable?: boolean;
 }
 
-const CustomerView: React.FC<CustomerViewProps> = ({ onAddOrder, initialTable = '', isStaffMode = false }) => {
+const CustomerView: React.FC<CustomerViewProps> = ({ onAddOrder, initialTable = '', isStaffMode = false, lockTable = false }) => {
   const [selectedTable, setSelectedTable] = useState(initialTable);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [activeCategory, setActiveCategory] = useState<Category>('主食');
   const [showCart, setShowCart] = useState(false);
   const [isOrdered, setIsOrdered] = useState(false);
+
+  useEffect(() => {
+    if (initialTable) setSelectedTable(initialTable);
+  }, [initialTable]);
 
   const categories: Category[] = ['主食', '小菜', '湯品', '飲料'];
 
@@ -90,27 +95,31 @@ const CustomerView: React.FC<CustomerViewProps> = ({ onAddOrder, initialTable = 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50 pb-32">
       {/* Header */}
-      <header className="sticky top-0 z-20 bg-orange-500 text-white p-4 shadow-md">
+      <header className="sticky top-0 z-20 bg-orange-500 text-white p-4 shadow-md no-print">
         <div className="flex justify-between items-center max-w-lg mx-auto">
           <h1 className="text-xl font-bold flex items-center gap-2">
             {isStaffMode ? '櫃檯人工點餐' : '美味小吃點餐'}
           </h1>
           <div className="flex items-center gap-2">
-             <span className="text-sm font-medium">桌號:</span>
-             <select 
-              value={selectedTable}
-              onChange={(e) => setSelectedTable(e.target.value)}
-              className="bg-orange-600 text-white border-none rounded px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-white"
-             >
-               <option value="">選擇</option>
-               {TABLES.map(t => <option key={t} value={t}>{t}</option>)}
-             </select>
+             <span className="text-sm font-medium"><MapPin size={14} className="inline mr-1" />桌號:</span>
+             {lockTable ? (
+               <span className="bg-orange-700 px-3 py-1 rounded font-black">{selectedTable}</span>
+             ) : (
+               <select 
+                value={selectedTable}
+                onChange={(e) => setSelectedTable(e.target.value)}
+                className="bg-orange-600 text-white border-none rounded px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-white"
+               >
+                 <option value="">選擇</option>
+                 {TABLES.map(t => <option key={t} value={t}>{t}</option>)}
+               </select>
+             )}
           </div>
         </div>
       </header>
 
       {/* Category Tabs */}
-      <div className="sticky top-[60px] z-10 bg-white border-b overflow-x-auto hide-scrollbar">
+      <div className="sticky top-[60px] z-10 bg-white border-b overflow-x-auto hide-scrollbar no-print">
         <div className="flex px-4 max-w-lg mx-auto">
           {categories.map(cat => (
             <button
@@ -127,7 +136,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({ onAddOrder, initialTable = 
       </div>
 
       {/* Menu List */}
-      <main className="flex-1 max-w-lg mx-auto w-full p-4 space-y-4">
+      <main className="flex-1 max-w-lg mx-auto w-full p-4 space-y-4 no-print">
         {INITIAL_MENU.filter(m => m.category === activeCategory).map(item => (
           <div key={item.id} className="bg-white rounded-xl shadow-sm overflow-hidden flex h-32 border border-slate-100">
             <img src={item.image} alt={item.name} className="w-32 h-full object-cover" />
@@ -163,14 +172,14 @@ const CustomerView: React.FC<CustomerViewProps> = ({ onAddOrder, initialTable = 
         ))}
       </main>
 
-      {/* Cart Summary (Floating above Nav) */}
+      {/* Cart Summary */}
       {cartItemsCount > 0 && (
-        <div className="fixed bottom-20 left-0 right-0 p-4 z-30 max-w-lg mx-auto">
+        <div className="fixed bottom-20 left-0 right-0 p-4 z-30 max-w-lg mx-auto no-print">
           <div className="bg-slate-900 text-white rounded-2xl shadow-2xl overflow-hidden">
             {showCart && (
               <div className="p-4 border-b border-slate-700 max-h-[40vh] overflow-y-auto">
                 <div className="flex justify-between items-center mb-4">
-                  <h4 className="font-bold flex items-center gap-2"><ShoppingCart size={18}/> 您的訂單</h4>
+                  <h4 className="font-bold flex items-center gap-2"><ShoppingCart size={18}/> 您的訂單 ({selectedTable}桌)</h4>
                   <button onClick={() => setShowCart(false)} className="text-slate-400 hover:text-white"><ArrowLeft size={18}/></button>
                 </div>
                 <div className="space-y-4">
@@ -202,7 +211,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({ onAddOrder, initialTable = 
                   </span>
                 </div>
                 <div>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wider uppercase">Total Price</p>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider uppercase">總金額</p>
                   <p className="text-lg font-black text-white">${totalPrice}</p>
                 </div>
               </div>
