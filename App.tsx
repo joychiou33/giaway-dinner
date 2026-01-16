@@ -10,14 +10,14 @@ import { getDatabase, ref, onValue, set, push, update, Database } from 'firebase
 
 // --- 正式雲端資料庫設定 ---
 const firebaseConfig = {
-  apiKey: "AIzaSyDuZsp3CNEUTY8qza8vKsH3PNGe7j-7RwA",
-  authDomain: "giaway-dinner.firebaseapp.com",
-  databaseURL: "https://giaway-dinner-default-rtdb.firebaseio.com", 
-  projectId: "giaway-dinner",
-  storageBucket: "giaway-dinner.firebasestorage.app",
-  messagingSenderId: "822606609736",
-  appId: "1:822606609736:web:d86a77929c5990d7b5477d",
-  measurementId: "G-KY76R3Z49B"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 const Navigation: React.FC<{ isOwner: boolean }> = ({ isOwner }) => {
@@ -27,16 +27,16 @@ const Navigation: React.FC<{ isOwner: boolean }> = ({ isOwner }) => {
 
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-[100] flex justify-around items-center h-16 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] md:max-w-md md:mx-auto md:rounded-t-2xl no-print">
-      <button 
+      <button
         onClick={() => navigate('/customer')}
         className={`flex-1 flex flex-col items-center gap-1 transition-colors ${path.startsWith('/customer') ? 'text-orange-500 font-bold' : 'text-slate-400'}`}
       >
         <ShoppingBag size={20} />
         <span className="text-[10px] font-bold">我要點餐</span>
       </button>
-      
+
       {isOwner ? (
-        <button 
+        <button
           onClick={() => navigate('/owner')}
           className={`flex-1 flex flex-col items-center gap-1 transition-colors ${path.startsWith('/owner') ? 'text-orange-500 font-bold' : 'text-slate-400'}`}
         >
@@ -44,7 +44,7 @@ const Navigation: React.FC<{ isOwner: boolean }> = ({ isOwner }) => {
           <span className="text-[10px] font-bold">老闆後台</span>
         </button>
       ) : (
-        <button 
+        <button
           onClick={() => navigate('/login')}
           className="flex-1 flex flex-col items-center gap-1 text-slate-300 hover:text-slate-400"
         >
@@ -80,7 +80,7 @@ const App: React.FC = () => {
   // 1. 核心：監聽雲端連線狀態與訂單數據
   useEffect(() => {
     if (!db) return;
-    
+
     // 監聽實際的資料
     const ordersRef = ref(db, 'orders');
     const unsubscribe = onValue(ordersRef, (snapshot) => {
@@ -88,7 +88,7 @@ const App: React.FC = () => {
       if (snapshot.exists() && data) {
         const list: Order[] = Object.keys(data).map(key => ({
           ...data[key],
-          fbKey: key, 
+          fbKey: key,
           createdAt: new Date(data[key].createdAt)
         }));
         setOrders(list);
@@ -142,7 +142,7 @@ const App: React.FC = () => {
 
     const ordersRef = ref(db, 'orders');
     const newOrderPushRef = push(ordersRef);
-    
+
     set(newOrderPushRef, newOrder).catch((error) => {
       console.error("雲端訂單發送失敗:", error.message);
     });
@@ -180,19 +180,19 @@ const App: React.FC = () => {
         <Routes>
           <Route path="/customer" element={<CustomerView onAddOrder={handleAddOrder} />} />
           <Route path="/customer/table/:tableId" element={<CustomerTableWrapper onAddOrder={handleAddOrder} />} />
-          <Route 
-            path="/owner/*" 
+          <Route
+            path="/owner/*"
             element={isOwner ? (
-              <OwnerDashboard 
-                orders={orders} 
-                onUpdateStatus={updateOrderStatus} 
-                onClearTable={clearTable} 
+              <OwnerDashboard
+                orders={orders}
+                onUpdateStatus={updateOrderStatus}
+                onClearTable={clearTable}
                 onAddOrder={handleAddOrder}
                 onLogout={handleLogout}
                 onChangePasscode={handleChangePasscode}
                 isCloudEnabled={isConnected}
               />
-            ) : <Navigate to="/login" replace />} 
+            ) : <Navigate to="/login" replace />}
           />
           <Route path="/login" element={<OwnerLogin onLogin={handleLogin} />} />
           <Route path="/" element={<Navigate to="/customer" replace />} />
