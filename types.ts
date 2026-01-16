@@ -21,6 +21,7 @@ export type OrderStatus = 'pending' | 'preparing' | 'completed' | 'cancelled' | 
 
 export interface Order {
   id: string;
+  fbKey?: string; // 雲端資料庫的唯一鍵值
   tableNumber: string;
   items: OrderItem[];
   totalPrice: number;

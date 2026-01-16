@@ -1,11 +1,24 @@
-
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Order, OrderItem, OrderStatus } from './types';
 import CustomerView from './components/CustomerView';
 import OwnerDashboard from './components/OwnerDashboard';
 import OwnerLogin from './components/OwnerLogin';
 import { Store, ShoppingBag, Lock } from 'lucide-react';
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import { getDatabase, ref, onValue, set, push, update, Database } from 'firebase/database';
+
+// --- 正式雲端資料庫設定 ---
+const firebaseConfig = {
+  apiKey: "AIzaSyDuZsp3CNEUTY8qza8vKsH3PNGe7j-7RwA",
+  authDomain: "giaway-dinner.firebaseapp.com",
+  databaseURL: "https://giaway-dinner-default-rtdb.firebaseio.com", 
+  projectId: "giaway-dinner",
+  storageBucket: "giaway-dinner.firebasestorage.app",
+  messagingSenderId: "822606609736",
+  appId: "1:822606609736:web:d86a77929c5990d7b5477d",
+  measurementId: "G-KY76R3Z49B"
+};
 
 const Navigation: React.FC<{ isOwner: boolean }> = ({ isOwner }) => {
   const navigate = useNavigate();
@@ -14,16 +27,16 @@ const Navigation: React.FC<{ isOwner: boolean }> = ({ isOwner }) => {
 
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-[100] flex justify-around items-center h-16 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] md:max-w-md md:mx-auto md:rounded-t-2xl no-print">
-      <button
+      <button 
         onClick={() => navigate('/customer')}
         className={`flex-1 flex flex-col items-center gap-1 transition-colors ${path.startsWith('/customer') ? 'text-orange-500 font-bold' : 'text-slate-400'}`}
       >
         <ShoppingBag size={20} />
         <span className="text-[10px] font-bold">我要點餐</span>
       </button>
-
+      
       {isOwner ? (
-        <button
+        <button 
           onClick={() => navigate('/owner')}
           className={`flex-1 flex flex-col items-center gap-1 transition-colors ${path.startsWith('/owner') ? 'text-orange-500 font-bold' : 'text-slate-400'}`}
         >
@@ -31,7 +44,7 @@ const Navigation: React.FC<{ isOwner: boolean }> = ({ isOwner }) => {
           <span className="text-[10px] font-bold">老闆後台</span>
         </button>
       ) : (
-        <button
+        <button 
           onClick={() => navigate('/login')}
           className="flex-1 flex flex-col items-center gap-1 text-slate-300 hover:text-slate-400"
         >
@@ -44,36 +57,53 @@ const Navigation: React.FC<{ isOwner: boolean }> = ({ isOwner }) => {
 };
 
 const App: React.FC = () => {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [isOwner, setIsOwner] = useState<boolean>(() => {
-    return sessionStorage.getItem('is_owner') === 'true';
-  });
+  // 核心資料庫實例初始化，加入錯誤捕獲確保 App 不會因為初始化失敗而崩潰
+  const db: Database | null = useMemo(() => {
+    try {
+      const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+      return getDatabase(app);
+    } catch (e) {
+      console.error("Firebase 初始化失敗:", e);
+      return null;
+    }
+  }, []);
 
-  // 取得當前密碼，若無則設為 88888888
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isOwner, setIsOwner] = useState<boolean>(() => sessionStorage.getItem('is_owner') === 'true');
+
   const [ownerPasscode, setOwnerPasscode] = useState<string>(() => {
     const saved = localStorage.getItem('owner_passcode');
     return saved || '88888888';
   });
 
+  // 1. 核心：監聽雲端連線狀態與訂單數據
   useEffect(() => {
-    localStorage.setItem('owner_passcode', ownerPasscode);
-  }, [ownerPasscode]);
-
-  useEffect(() => {
-    const saved = localStorage.getItem('snack_orders');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setOrders(parsed.map((o: any) => ({ ...o, createdAt: new Date(o.createdAt) })));
-      } catch (e) {
-        console.error("Failed to parse orders", e);
+    if (!db) return;
+    
+    // 監聽實際的資料
+    const ordersRef = ref(db, 'orders');
+    const unsubscribe = onValue(ordersRef, (snapshot) => {
+      const data = snapshot.val();
+      if (snapshot.exists() && data) {
+        const list: Order[] = Object.keys(data).map(key => ({
+          ...data[key],
+          fbKey: key, 
+          createdAt: new Date(data[key].createdAt)
+        }));
+        setOrders(list);
+        setIsConnected(true);
+      } else {
+        setOrders([]);
+        setIsConnected(true);
       }
-    }
-  }, []);
+    }, (error) => {
+      console.error("Firebase 連線錯誤:", error.message);
+      setIsConnected(false);
+    });
 
-  useEffect(() => {
-    localStorage.setItem('snack_orders', JSON.stringify(orders));
-  }, [orders]);
+    return () => unsubscribe();
+  }, [db]);
 
   const handleLogin = (pass: string) => {
     if (pass === ownerPasscode) {
@@ -92,34 +122,57 @@ const App: React.FC = () => {
   const handleChangePasscode = (newPass: string) => {
     if (newPass.length === 8 && /^\d+$/.test(newPass)) {
       setOwnerPasscode(newPass);
+      localStorage.setItem('owner_passcode', newPass);
       return true;
     }
     return false;
   };
 
+  // 2. 送出訂單到雲端
   const handleAddOrder = useCallback((tableNumber: string, items: OrderItem[]) => {
-    const newOrder: Order = {
+    if (!db) return;
+    const newOrder = {
       id: Math.random().toString(36).substr(2, 9),
       tableNumber,
       items,
       totalPrice: items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
       status: 'pending',
-      createdAt: new Date(),
+      createdAt: new Date().toISOString(),
     };
-    setOrders(prev => [...prev, newOrder]);
-  }, []);
 
+    const ordersRef = ref(db, 'orders');
+    const newOrderPushRef = push(ordersRef);
+    
+    set(newOrderPushRef, newOrder).catch((error) => {
+      console.error("雲端訂單發送失敗:", error.message);
+    });
+  }, [db]);
+
+  // 3. 更新訂單狀態同步到雲端
   const updateOrderStatus = useCallback((id: string, status: OrderStatus) => {
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
-  }, []);
+    if (!db) return;
+    const targetOrder = orders.find(o => o.id === id);
+    const fbKey = targetOrder?.fbKey;
 
+    if (fbKey) {
+      const orderUpdateRef = ref(db, `orders/${fbKey}`);
+      update(orderUpdateRef, { status }).catch(err => {
+        console.error("雲端更新失敗:", err);
+      });
+    }
+  }, [orders, db]);
+
+  // 4. 結帳清桌同步到雲端
   const clearTable = useCallback((tableNumber: string) => {
-    setOrders(prev => prev.map(o =>
-      (o.tableNumber === tableNumber && o.status !== 'cancelled' && o.status !== 'paid')
-        ? { ...o, status: 'paid' }
-        : o
-    ));
-  }, []);
+    if (!db) return;
+    orders.forEach(o => {
+      if (o.tableNumber === tableNumber && o.status !== 'cancelled' && o.status !== 'paid' && o.fbKey) {
+        update(ref(db, `orders/${o.fbKey}`), { status: 'paid' }).catch(err => {
+          console.error("結帳同步失敗:", err);
+        });
+      }
+    });
+  }, [orders, db]);
 
   return (
     <Router>
@@ -127,18 +180,19 @@ const App: React.FC = () => {
         <Routes>
           <Route path="/customer" element={<CustomerView onAddOrder={handleAddOrder} />} />
           <Route path="/customer/table/:tableId" element={<CustomerTableWrapper onAddOrder={handleAddOrder} />} />
-          <Route
-            path="/owner/*"
+          <Route 
+            path="/owner/*" 
             element={isOwner ? (
-              <OwnerDashboard
-                orders={orders}
-                onUpdateStatus={updateOrderStatus}
-                onClearTable={clearTable}
-                onManualOrder={() => window.location.hash = '/owner/manual'}
+              <OwnerDashboard 
+                orders={orders} 
+                onUpdateStatus={updateOrderStatus} 
+                onClearTable={clearTable} 
+                onAddOrder={handleAddOrder}
                 onLogout={handleLogout}
                 onChangePasscode={handleChangePasscode}
+                isCloudEnabled={isConnected}
               />
-            ) : <Navigate to="/login" replace />}
+            ) : <Navigate to="/login" replace />} 
           />
           <Route path="/login" element={<OwnerLogin onLogin={handleLogin} />} />
           <Route path="/" element={<Navigate to="/customer" replace />} />
