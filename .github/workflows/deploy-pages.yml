@@ -16,24 +16,46 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ 取得原始碼
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 👉 已移除 cache: npm（關鍵修正）
+      # 2️⃣ 設定 Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "18"
 
-      - name: Install dependencies
-        run: npm install
+      # 3️⃣ 快取 npm 與 node_modules
+      - name: Cache npm and node_modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.npm
+            node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
 
+      # 4️⃣ 安裝依賴（自動 fallback 避免 Rollup optional dependency 問題）
+      - name: Install dependencies
+        run: |
+          set -e
+          npm install || (
+            echo "Cache 或 optional dependency 出錯，重新安裝..."
+            rm -rf node_modules package-lock.json
+            npm install
+          )
+
+      # 5️⃣ Build Vite 專案
       - name: Build project
         run: npm run build
 
+      # 6️⃣ 設定 GitHub Pages
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v5
 
+      # 7️⃣ 上傳 build artifact
       - name: Upload build to artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -43,5 +65,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
+      # 8️⃣ 部署到 GitHub Pages
       - name: Deploy to GitHub Pages
         uses: actions/deploy-pages@v4
