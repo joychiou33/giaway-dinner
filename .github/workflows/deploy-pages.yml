@@ -25,7 +25,7 @@ jobs:
           node-version: "18"
           cache: "npm"
 
-      # 👉 關鍵修正：這裡改成 npm install
+      # 👉 這裡「一定」要是 npm install
       - name: Install dependencies
         run: npm install
 
