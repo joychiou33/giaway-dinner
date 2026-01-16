@@ -14,16 +14,16 @@ const Navigation: React.FC<{ isOwner: boolean }> = ({ isOwner }) => {
 
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-[100] flex justify-around items-center h-16 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] md:max-w-md md:mx-auto md:rounded-t-2xl no-print">
-      <button 
+      <button
         onClick={() => navigate('/customer')}
         className={`flex-1 flex flex-col items-center gap-1 transition-colors ${path.startsWith('/customer') ? 'text-orange-500 font-bold' : 'text-slate-400'}`}
       >
         <ShoppingBag size={20} />
         <span className="text-[10px] font-bold">我要點餐</span>
       </button>
-      
+
       {isOwner ? (
-        <button 
+        <button
           onClick={() => navigate('/owner')}
           className={`flex-1 flex flex-col items-center gap-1 transition-colors ${path.startsWith('/owner') ? 'text-orange-500 font-bold' : 'text-slate-400'}`}
         >
@@ -31,7 +31,7 @@ const Navigation: React.FC<{ isOwner: boolean }> = ({ isOwner }) => {
           <span className="text-[10px] font-bold">老闆後台</span>
         </button>
       ) : (
-        <button 
+        <button
           onClick={() => navigate('/login')}
           className="flex-1 flex flex-col items-center gap-1 text-slate-300 hover:text-slate-400"
         >
@@ -114,10 +114,10 @@ const App: React.FC = () => {
   }, []);
 
   const clearTable = useCallback((tableNumber: string) => {
-    setOrders(prev => prev.map(o => 
-      (o.tableNumber === tableNumber && o.status !== 'cancelled' && o.status !== 'paid') 
-      ? { ...o, status: 'paid' } 
-      : o
+    setOrders(prev => prev.map(o =>
+      (o.tableNumber === tableNumber && o.status !== 'cancelled' && o.status !== 'paid')
+        ? { ...o, status: 'paid' }
+        : o
     ));
   }, []);
 
@@ -127,18 +127,18 @@ const App: React.FC = () => {
         <Routes>
           <Route path="/customer" element={<CustomerView onAddOrder={handleAddOrder} />} />
           <Route path="/customer/table/:tableId" element={<CustomerTableWrapper onAddOrder={handleAddOrder} />} />
-          <Route 
-            path="/owner/*" 
+          <Route
+            path="/owner/*"
             element={isOwner ? (
-              <OwnerDashboard 
-                orders={orders} 
-                onUpdateStatus={updateOrderStatus} 
-                onClearTable={clearTable} 
-                onManualOrder={() => window.location.hash = '/owner/manual'} 
+              <OwnerDashboard
+                orders={orders}
+                onUpdateStatus={updateOrderStatus}
+                onClearTable={clearTable}
+                onManualOrder={() => window.location.hash = '/owner/manual'}
                 onLogout={handleLogout}
                 onChangePasscode={handleChangePasscode}
               />
-            ) : <Navigate to="/login" replace />} 
+            ) : <Navigate to="/login" replace />}
           />
           <Route path="/login" element={<OwnerLogin onLogin={handleLogin} />} />
           <Route path="/" element={<Navigate to="/customer" replace />} />
