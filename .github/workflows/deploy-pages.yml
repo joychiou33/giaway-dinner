@@ -14,7 +14,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -24,17 +23,7 @@ jobs:
         with:
           node-version: "20"
 
-      # Cache npm folder only
-      - name: Cache npm
-        uses: actions/cache@v3
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-
-      # 安裝依賴（忽略 optional dependencies 避免 Rollup native module 問題）
-      - name: Install dependencies
+      - name: Install dependencies (omit optional)
         run: npm ci --omit=optional
 
       - name: Build project
